@@ -1,0 +1,1150 @@
+{
+  "name": "AI-Powered Opportunity & Education Coach",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "user-signup",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-user-signup",
+      "name": "User Signup Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [220, 300],
+      "webhookId": "user-signup-webhook"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "user_id",
+              "value": "={{$json.user_id}}"
+            },
+            {
+              "name": "name",
+              "value": "={{$json.name}}"
+            },
+            {
+              "name": "email",
+              "value": "={{$json.email}}"
+            },
+            {
+              "name": "phone",
+              "value": "={{$json.phone}}"
+            },
+            {
+              "name": "job_interests",
+              "value": "={{$json.job_interests}}"
+            },
+            {
+              "name": "current_skills",
+              "value": "={{$json.current_skills}}"
+            },
+            {
+              "name": "education_level",
+              "value": "={{$json.education_level}}"
+            },
+            {
+              "name": "preferred_channel",
+              "value": "={{$json.preferred_channel}}"
+            },
+            {
+              "name": "location",
+              "value": "={{$json.location}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-user-data",
+      "name": "Set User Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "users",
+        "columns": "user_id, name, email, phone, job_interests, current_skills, education_level, preferred_channel, location, created_at",
+        "additionalFields": {}
+      },
+      "id": "save-user-profile",
+      "name": "Save User Profile",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [660, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credentials",
+          "name": "PostgreSQL Database"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"status\": \"success\",\n  \"message\": \"User registered successfully\",\n  \"user_id\": \"{{$json.user_id}}\",\n  \"next_steps\": [\n    \"Check your email/phone for personalized recommendations\",\n    \"Start your first recommended course\",\n    \"Apply to matched job opportunities\"\n  ]\n}"
+      },
+      "id": "signup-response",
+      "name": "Signup Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "hour": 9,
+              "minute": 0
+            }
+          ]
+        }
+      },
+      "id": "daily-job-scan-trigger",
+      "name": "Daily Job Scan Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [220, 600]
+    },
+    {
+      "parameters": {
+        "url": "https://api.indeed.com/ads/apisearch",
+        "options": {
+          "qs": {
+            "publisher": "{{$credentials.indeed_api_key}}",
+            "q": "entry level OR no experience",
+            "l": "India",
+            "sort": "date",
+            "radius": "25",
+            "st": "jobsite",
+            "jt": "fulltime,parttime,contract",
+            "start": "0",
+            "limit": "25",
+            "fromage": "1",
+            "format": "json"
+          }
+        }
+      },
+      "id": "scan-indeed-jobs",
+      "name": "Scan Indeed Jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [440, 600]
+    },
+    {
+      "parameters": {
+        "url": "https://api.naukri.com/v4/jobsearch",
+        "options": {
+          "headers": {
+            "apikey": "{{$credentials.naukri_api_key}}"
+          },
+          "qs": {
+            "keywords": "entry level fresher",
+            "location": "India",
+            "experience": "0-1",
+            "salaryType": "annual",
+            "postedWithin": "1"
+          }
+        }
+      },
+      "id": "scan-naukri-jobs",
+      "name": "Scan Naukri Jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [440, 720]
+    },
+    {
+      "parameters": {
+        "url": "https://api.coursera.org/api/courses.v1",
+        "options": {
+          "qs": {
+            "q": "search",
+            "query": "beginner programming data entry sales",
+            "fields": "name,description,photoUrl,workload,partners.v1(name),instructors.v1(fullName),price",
+            "includes": "partners.v1,instructors.v1",
+            "start": "0",
+            "limit": "20"
+          }
+        }
+      },
+      "id": "scan-coursera-courses",
+      "name": "Scan Coursera Courses",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [660, 600]
+    },
+    {
+      "parameters": {
+        "url": "https://api.edx.org/api/courses/v1/courses/",
+        "options": {
+          "qs": {
+            "search": "beginner programming data skills",
+            "availability": "Current",
+            "verified": "false",
+            "page_size": "20"
+          }
+        }
+      },
+      "id": "scan-edx-courses",
+      "name": "Scan edX Courses",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [660, 720]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Filter and clean job data\nconst jobs = [];\nconst items = $input.all();\n\nfor (const item of items) {\n  if (item.json.results) {\n    // Indeed jobs\n    for (const job of item.json.results) {\n      if (job.snippet && job.jobtitle) {\n        jobs.push({\n          source: 'indeed',\n          title: job.jobtitle,\n          company: job.company,\n          location: job.formattedLocation,\n          description: job.snippet,\n          url: job.url,\n          posted_date: job.date,\n          experience_level: 'entry',\n          skills_required: extractSkills(job.snippet + ' ' + job.jobtitle)\n        });\n      }\n    }\n  }\n  \n  if (item.json.jobs) {\n    // Naukri jobs\n    for (const job of item.json.jobs) {\n      jobs.push({\n        source: 'naukri',\n        title: job.title,\n        company: job.company,\n        location: job.location,\n        description: job.description,\n        url: job.url,\n        posted_date: job.postedDate,\n        experience_level: 'entry',\n        skills_required: extractSkills(job.description + ' ' + job.title)\n      });\n    }\n  }\n}\n\nfunction extractSkills(text) {\n  const skillKeywords = [\n    'excel', 'data entry', 'microsoft office', 'communication',\n    'customer service', 'sales', 'marketing', 'programming',\n    'python', 'javascript', 'html', 'css', 'sql', 'accounting',\n    'bookkeeping', 'typing', 'computer', 'internet'\n  ];\n  \n  const foundSkills = [];\n  const lowerText = text.toLowerCase();\n  \n  for (const skill of skillKeywords) {\n    if (lowerText.includes(skill)) {\n      foundSkills.push(skill);\n    }\n  }\n  \n  return foundSkills;\n}\n\nreturn jobs.map(job => ({ json: job }));"
+      },
+      "id": "process-job-data",
+      "name": "Process Job Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [880, 600]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Filter and clean course data\nconst courses = [];\nconst items = $input.all();\n\nfor (const item of items) {\n  if (item.json.elements) {\n    // Coursera courses\n    for (const course of item.json.elements) {\n      if (course.name) {\n        courses.push({\n          source: 'coursera',\n          title: course.name,\n          description: course.description || '',\n          url: `https://coursera.org/learn/${course.slug}`,\n          price: course.price || 'free',\n          duration: course.workload || 'self-paced',\n          skills_taught: extractSkills(course.name + ' ' + (course.description || '')),\n          difficulty: 'beginner'\n        });\n      }\n    }\n  }\n  \n  if (item.json.results) {\n    // edX courses\n    for (const course of item.json.results) {\n      courses.push({\n        source: 'edx',\n        title: course.name,\n        description: course.short_description || '',\n        url: `https://edx.org${course.course_runs[0]?.marketing_url || ''}`,\n        price: course.course_runs[0]?.seats?.find(s => s.type === 'audit')?.price || 'free',\n        duration: course.course_runs[0]?.weeks_to_complete || 'self-paced',\n        skills_taught: extractSkills(course.name + ' ' + (course.short_description || '')),\n        difficulty: 'beginner'\n      });\n    }\n  }\n}\n\nfunction extractSkills(text) {\n  const skillKeywords = [\n    'excel', 'data analysis', 'microsoft office', 'communication',\n    'customer service', 'sales', 'marketing', 'programming',\n    'python', 'javascript', 'html', 'css', 'sql', 'accounting',\n    'bookkeeping', 'typing', 'computer skills', 'digital literacy'\n  ];\n  \n  const foundSkills = [];\n  const lowerText = text.toLowerCase();\n  \n  for (const skill of skillKeywords) {\n    if (lowerText.includes(skill)) {\n      foundSkills.push(skill);\n    }\n  }\n  \n  return foundSkills;\n}\n\n// Filter courses under ₹500 or free\nconst affordableCourses = courses.filter(course => {\n  const price = course.price;\n  if (price === 'free' || price === 0) return true;\n  if (typeof price === 'string' && price.includes('₹')) {\n    const amount = parseInt(price.replace(/[^0-9]/g, ''));\n    return amount <= 500;\n  }\n  return false;\n});\n\nreturn affordableCourses.map(course => ({ json: course }));"
+      },
+      "id": "process-course-data",
+      "name": "Process Course Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [880, 720]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "jobs",
+        "columns": "source, title, company, location, description, url, posted_date, experience_level, skills_required",
+        "additionalFields": {}
+      },
+      "id": "save-jobs",
+      "name": "Save Jobs",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [1100, 600]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "courses",
+        "columns": "source, title, description, url, price, duration, skills_taught, difficulty",
+        "additionalFields": {}
+      },
+      "id": "save-courses",
+      "name": "Save Courses",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [1100, 720]
+    },
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "hour": 10,
+              "minute": 0
+            }
+          ]
+        }
+      },
+      "id": "daily-matching-trigger",
+      "name": "Daily Matching Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [220, 1000]
+    },
+    {
+      "parameters": {
+        "operation": "select",
+        "table": "users",
+        "returnAll": true
+      },
+      "id": "get-all-users",
+      "name": "Get All Users",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [440, 1000]
+    },
+    {
+      "parameters": {
+        "functionCode": "// AI-powered job and course matching\nconst users = $input.all();\nconst matches = [];\n\nfor (const userItem of users) {\n  const user = userItem.json;\n  \n  // Create user profile for AI analysis\n  const userProfile = {\n    interests: user.job_interests?.split(',') || [],\n    skills: user.current_skills?.split(',') || [],\n    education: user.education_level || 'basic',\n    location: user.location || 'India'\n  };\n  \n  // This would typically call an AI service like OpenAI GPT\n  // For now, we'll use rule-based matching\n  const jobMatches = findMatchingJobs(userProfile);\n  const courseMatches = findMatchingCourses(userProfile, jobMatches);\n  \n  matches.push({\n    user_id: user.user_id,\n    name: user.name,\n    email: user.email,\n    phone: user.phone,\n    preferred_channel: user.preferred_channel,\n    matched_jobs: jobMatches.slice(0, 5), // Top 5 jobs\n    recommended_courses: courseMatches.slice(0, 3), // Top 3 courses\n    learning_plan: generateLearningPlan(courseMatches[0], jobMatches[0])\n  });\n}\n\nfunction findMatchingJobs(userProfile) {\n  // This would query the jobs table and use AI to match\n  // Returning mock data for demonstration\n  return [\n    {\n      title: 'Data Entry Clerk',\n      company: 'TechCorp',\n      match_score: 0.85,\n      required_skills: ['excel', 'typing', 'attention to detail']\n    },\n    {\n      title: 'Customer Service Representative',\n      company: 'ServicePlus',\n      match_score: 0.78,\n      required_skills: ['communication', 'problem solving']\n    }\n  ];\n}\n\nfunction findMatchingCourses(userProfile, jobMatches) {\n  // This would query the courses table and match with job requirements\n  return [\n    {\n      title: 'Excel for Beginners',\n      source: 'coursera',\n      duration: '4 weeks',\n      skills_taught: ['excel', 'data analysis']\n    },\n    {\n      title: 'Communication Skills',\n      source: 'edx',\n      duration: '3 weeks',\n      skills_taught: ['communication', 'presentation']\n    }\n  ];\n}\n\nfunction generateLearningPlan(course, job) {\n  if (!course || !job) return null;\n  \n  return {\n    target_job: job.title,\n    primary_course: course.title,\n    study_schedule: '1 hour daily',\n    milestones: [\n      { week: 1, goal: 'Complete basic concepts' },\n      { week: 2, goal: 'Practice exercises' },\n      { week: 3, goal: 'Take assessment' },\n      { week: 4, goal: 'Apply for jobs' }\n    ]\n  };\n}\n\nreturn matches.map(match => ({ json: match }));"
+      },
+      "id": "ai-matching-engine",
+      "name": "AI Matching Engine",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [660, 1000]
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "operation": "message",
+        "chatId": "={{$json.phone}}",
+        "text": "🎯 New Opportunities for You!\n\nHi {{$json.name}},\n\nGreat news! We found {{$json.matched_jobs.length}} job opportunities that match your profile:\n\n{{$json.matched_jobs.map(job => `• ${job.title} at ${job.company} (${Math.round(job.match_score * 100)}% match)`).join('\\n')}}\n\n📚 Recommended Learning:\n{{$json.recommended_courses.map(course => `• ${course.title} (${course.duration})`).join('\\n')}}\n\n✅ Your Learning Plan:\nTarget: {{$json.learning_plan?.target_job}}\nStudy: {{$json.learning_plan?.study_schedule}}\n\nReply 'START' to begin your learning journey!",
+        "additionalFields": {}
+      },
+      "id": "send-telegram-notification",
+      "name": "Send Telegram Notification",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [880, 1000],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-bot-credentials",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "coach@opportunityai.com",
+        "toEmail": "={{$json.email}}",
+        "subject": "Your Personalized Opportunity & Learning Plan 🚀",
+        "text": "Hi {{$json.name}},\n\nYour AI Coach has found exciting opportunities tailored just for you!\n\n🎯 TOP JOB MATCHES:\n{{$json.matched_jobs.map(job => `• ${job.title} at ${job.company} - ${Math.round(job.match_score * 100)}% match`).join('\\n')}}\n\n📚 RECOMMENDED COURSES:\n{{$json.recommended_courses.map(course => `• ${course.title} - ${course.duration}`).join('\\n')}}\n\n🎯 YOUR LEARNING PLAN:\nTarget Job: {{$json.learning_plan?.target_job}}\nPrimary Course: {{$json.learning_plan?.primary_course}}\nStudy Schedule: {{$json.learning_plan?.study_schedule}}\n\nWeekly Milestones:\n{{$json.learning_plan?.milestones.map(m => `Week ${m.week}: ${m.goal}`).join('\\n')}}\n\nClick here to start your journey: [Access Dashboard]\n\nBest regards,\nYour AI Opportunity Coach",
+        "options": {}
+      },
+      "id": "send-email-notification",
+      "name": "Send Email Notification",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [880, 1120],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credentials",
+          "name": "SMTP Email"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "user_recommendations",
+        "columns": "user_id, matched_jobs, recommended_courses, learning_plan, created_at",
+        "additionalFields": {}
+      },
+      "id": "save-recommendations",
+      "name": "Save Recommendations",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [1100, 1000]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "start-learning",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-start-learning",
+      "name": "Start Learning Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [220, 1400],
+      "webhookId": "start-learning-webhook"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "user_id",
+              "value": "={{$json.user_id}}"
+            },
+            {
+              "name": "course_id",
+              "value": "={{$json.course_id}}"
+            },
+            {
+              "name": "progress",
+              "value": "0"
+            },
+            {
+              "name": "status",
+              "value": "started"
+            }
+          ]
+        }
+      },
+      "id": "set-learning-progress",
+      "name": "Set Learning Progress",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [440, 1400]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "learning_progress",
+        "columns": "user_id, course_id, progress, status, started_at",
+        "additionalFields": {}
+      },
+      "id": "save-learning-progress",
+      "name": "Save Learning Progress",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [660, 1400]
+    },
+    {
+      "parameters": {
+        "model": "gpt-3.5-turbo",
+        "messages": {
+          "messageType": "multipleMessages",
+          "values": [
+            {
+              "role": "system",
+              "content": "You are an AI Study Coach. Create personalized study plans, quizzes, and learning materials based on the user's course and progress. Be encouraging and supportive."
+            },
+            {
+              "role": "user",
+              "content": "Create a study plan and first quiz for: {{$json.course_title}}. User background: {{$json.user_background}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "generate-study-plan",
+      "name": "Generate Study Plan",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [880, 1400],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credentials",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"status\": \"success\",\n  \"message\": \"Learning journey started\",\n  \"study_plan\": {{$json.study_plan}},\n  \"next_quiz\": \"Available in your dashboard\"\n}"
+      },
+      "id": "learning-response",
+      "name": "Learning Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1100, 1400]
+    },
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "hour": 18,
+              "minute": 0
+            }
+          ]
+        }
+      },
+      "id": "daily-progress-reminder",
+      "name": "Daily Progress Reminder",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [220, 1700]
+    },
+    {
+      "parameters": {
+        "operation": "select",
+        "table": "learning_progress",
+        "where": {
+          "status": "in_progress"
+        },
+        "returnAll": true
+      },
+      "id": "get-active-learners",
+      "name": "Get Active Learners",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [440, 1700]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Generate personalized reminders and check progress\nconst learners = $input.all();\nconst reminders = [];\n\nfor (const learnerItem of learners) {\n  const learner = learnerItem.json;\n  \n  // Calculate days since last activity\n  const lastActivity = new Date(learner.last_activity || learner.started_at);\n  const daysSinceActivity = Math.floor((Date.now() - lastActivity.getTime()) / (1000 * 60 * 60 * 24));\n  \n  let reminderType = 'progress';\n  let message = '';\n  \n  if (daysSinceActivity >= 3) {\n    reminderType = 'comeback';\n    message = `Hi! We miss you in your ${learner.course_title} course. You're ${learner.progress}% complete - let's keep the momentum going! 💪`;\n  } else if (learner.progress >= 75) {\n    reminderType = 'completion';\n    message = `Amazing progress! You're ${learner.progress}% through ${learner.course_title}. Just a little more to go! 🎉`;\n  } else {\n    message = `Daily reminder: Spend 30 minutes on ${learner.course_title} today. You're doing great at ${learner.progress}%! 📚`;\n  }\n  \n  reminders.push({\n    user_id: learner.user_id,\n    course_id: learner.course_id,\n    course_title: learner.course_title,\n    progress: learner.progress,\n    reminder_type: reminderType,\n    message: message,\n    days_since_activity: daysSinceActivity\n  });\n}\n\nreturn reminders.map(reminder => ({ json: reminder }));"
+      },
+      "id": "generate-progress-reminders",
+      "name": "Generate Progress Reminders",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [660, 1700]
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "operation": "message",
+        "chatId": "={{$json.user_phone}}",
+        "text": "{{$json.message}}\n\nQuick actions:\n✅ Continue Learning\n📊 Check Progress\n🎯 View Jobs\n💬 Ask Coach\n\nReply with the action you want to take!",
+        "additionalFields": {}
+      },
+      "id": "send-progress-reminder",
+      "name": "Send Progress Reminder",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [880, 1700]
+    },
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "hour": 20,
+              "minute": 0
+            },
+            {
+              "weekday": [0]
+            }
+          ]
+        }
+      },
+      "id": "weekly-digest-trigger",
+      "name": "Weekly Digest Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [220, 2000]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Generate weekly digest with achievements, new opportunities, and progress\nconst users = $input.all();\nconst digests = [];\n\nfor (const userItem of users) {\n  const user = userItem.json;\n  \n  // This would typically query multiple tables to get comprehensive data\n  const weeklyData = {\n    user_id: user.user_id,\n    name: user.name,\n    email: user.email,\n    achievements: [\n      'Completed Module 2 of Excel Basics',\n      'Applied to 3 new job opportunities',\n      'Earned \"Data Entry Specialist\" badge'\n    ],\n    new_jobs: 5,\n    new_courses: 3,\n    learning_streak: 7,\n    progress_summary: {\n      courses_in_progress: 2,\n      avg_progress: 65,\n      time_studied: '4.5 hours'\n    },\n    next_week_goals: [\n      'Complete Excel certification',\n      'Apply to 5 more jobs',\n      'Start Communication Skills course'\n    ]\n  };\n  \n  digests.push(weeklyData);\n}\n\nreturn digests.map(digest => ({ json: digest }));"
+      },
+      "id": "generate-weekly-digest",
+      "name": "Generate Weekly Digest",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [440, 2000]
+    },
+    {
+      "parameters": {
+        "fromEmail": "coach@opportunityai.com",
+        "toEmail": "={{$json.email}}",
+        "subject": "🎉 Your Weekly Achievement Digest - {{$json.name}}",
+        "text": "Hi {{$json.name}},\n\nWhat an amazing week! Here's your progress summary:\n\n🏆 THIS WEEK'S ACHIEVEMENTS:\n{{$json.achievements.map(achievement => `✅ ${achievement}`).join('\\n')}}\n\n📊 LEARNING STATS:\n• Courses in Progress: {{$json.progress_summary.courses_in_progress}}\n• Average Progress: {{$json.progress_summary.avg_progress}}%\n• Time Studied: {{$json.progress_summary.time_studied}}\n• Learning Streak: {{$json.learning_streak}} days 🔥\n\n🆕 NEW OPPORTUNITIES:\n• {{$json.new_jobs}} new job matches\n• {{$json.new_courses}} new course recommendations\n\n🎯 NEXT WEEK'S GOALS:\n{{$json.next_week_goals.map(goal => `🎯 ${goal}`).join('\\n')}}\n\nKeep up the excellent work! You're making great progress towards your career goals.\n\n[View Full Dashboard] [Browse New Jobs] [Continue Learning]\n\nBest regards,\nYour AI Opportunity Coach",
+        "options": {}
+      },
+      "id": "send-weekly-digest",
+      "name": "Send Weekly Digest",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [660, 2000],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credentials",
+          "name": "SMTP Email"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "quiz-response",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-quiz-response",
+      "name": "Quiz Response Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [220, 2300],
+      "webhookId": "quiz-response-webhook"
+    },
+    {
+      "parameters": {
+        "model": "gpt-3.5-turbo",
+        "messages": {
+          "messageType": "multipleMessages",
+          "values": [
+            {
+              "role": "system",
+              "content": "You are an AI Study Coach. Evaluate quiz responses, provide feedback, and generate adaptive follow-up content based on performance."
+            },
+            {
+              "role": "user",
+              "content": "User answered quiz question: {{$json.question}} with answer: {{$json.user_answer}}. Correct answer: {{$json.correct_answer}}. Course: {{$json.course_title}}. Provide feedback and next steps."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "evaluate-quiz-response",
+      "name": "Evaluate Quiz Response",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [440, 2300],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credentials",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Process quiz results and update learning progress\nconst response = $input.first().json;\nconst aiEvaluation = response.choices[0].message.content;\n\n// Parse AI response to extract structured data\nconst isCorrect = $json.user_answer.toLowerCase() === $json.correct_answer.toLowerCase();\nconst scoreDelta = isCorrect ? 5 : -2;\n\n// Update progress based on performance\nlet progressUpdate = 0;\nif (isCorrect) {\n  progressUpdate = 2; // 2% progress for correct answer\n} else {\n  progressUpdate = 0.5; // Still give some progress for attempt\n}\n\nconst result = {\n  user_id: $json.user_id,\n  course_id: $json.course_id,\n  question_id: $json.question_id,\n  is_correct: isCorrect,\n  score_delta: scoreDelta,\n  progress_delta: progressUpdate,\n  ai_feedback: aiEvaluation,\n  needs_review: !isCorrect,\n  timestamp: new Date().toISOString()\n};\n\nreturn { json: result };"
+      },
+      "id": "process-quiz-results",
+      "name": "Process Quiz Results",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [660, 2300]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "table": "learning_progress",
+        "updateKey": "user_id,course_id",
+        "columns": "progress = progress + {{$json.progress_delta}}, score = score + {{$json.score_delta}}, last_activity = NOW()",
+        "additionalFields": {}
+      },
+      "id": "update-learning-progress",
+      "name": "Update Learning Progress",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [880, 2300]
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "operation": "message",
+        "chatId": "={{$json.user_phone}}",
+        "text": "{{$json.is_correct ? '🎉 Correct!' : '❌ Not quite right.'}} \n\n{{$json.ai_feedback}}\n\n📊 Progress: +{{$json.progress_delta}}% \n🏆 Score: {{$json.score_delta > 0 ? '+' : ''}}{{$json.score_delta}} points\n\n{{$json.needs_review ? '📚 We recommend reviewing this topic before moving on.' : '🚀 Great! Ready for the next challenge?'}}\n\nType 'NEXT' for next question or 'REVIEW' for study materials.",
+        "additionalFields": {}
+      },
+      "id": "send-quiz-feedback",
+      "name": "Send Quiz Feedback",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [1100, 2300]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "job-application",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-job-application",
+      "name": "Job Application Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [220, 2600],
+      "webhookId": "job-application-webhook"
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "job_applications",
+        "columns": "user_id, job_id, application_date, status, notes",
+        "additionalFields": {}
+      },
+      "id": "track-job-application",
+      "name": "Track Job Application",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [440, 2600]
+    },
+    {
+      "parameters": {
+        "model": "gpt-3.5-turbo",
+        "messages": {
+          "messageType": "multipleMessages",
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a career coach AI. Help users prepare for job applications by providing personalized advice, resume tips, and interview preparation based on their background and the job they're applying for."
+            },
+            {
+              "role": "user",
+              "content": "User applied for: {{$json.job_title}} at {{$json.company}}. User background: {{$json.user_skills}} and {{$json.education_level}}. Provide application tips and next steps."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "generate-application-advice",
+      "name": "Generate Application Advice",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [660, 2600]
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "operation": "message",
+        "chatId": "={{$json.user_phone}}",
+        "text": "🎯 Great choice applying for {{$json.job_title}}!\n\n{{$json.ai_advice}}\n\n📋 Next Steps:\n1️⃣ Tailor your resume for this role\n2️⃣ Prepare for potential interview questions\n3️⃣ Research the company culture\n4️⃣ Follow up in 1 week if no response\n\n💡 Would you like help with:\n📝 Resume optimization\n🗣️ Interview preparation\n🔍 Company research\n\nJust reply with your choice!",
+        "additionalFields": {}
+      },
+      "id": "send-application-guidance",
+      "name": "Send Application Guidance",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [880, 2600]
+    },
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "hour": 11,
+              "minute": 0
+            }
+          ]
+        }
+      },
+      "id": "gamification-trigger",
+      "name": "Gamification Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [220, 2900]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Check for achievements and badges\nconst users = $input.all();\nconst achievements = [];\n\nfor (const userItem of users) {\n  const user = userItem.json;\n  \n  // Check various achievement criteria\n  const userAchievements = [];\n  \n  // Learning streak achievements\n  if (user.learning_streak >= 7) {\n    userAchievements.push({\n      type: 'streak',\n      title: 'Week Warrior',\n      description: '7 days learning streak!',\n      icon: '🔥',\n      points: 50\n    });\n  }\n  \n  if (user.learning_streak >= 30) {\n    userAchievements.push({\n      type: 'streak',\n      title: 'Learning Legend',\n      description: '30 days learning streak!',\n      icon: '🏆',\n      points: 200\n    });\n  }\n  \n  // Course completion achievements\n  if (user.courses_completed >= 1) {\n    userAchievements.push({\n      type: 'completion',\n      title: 'First Graduate',\n      description: 'Completed your first course!',\n      icon: '🎓',\n      points: 100\n    });\n  }\n  \n  // Job application achievements\n  if (user.job_applications >= 5) {\n    userAchievements.push({\n      type: 'application',\n      title: 'Job Hunter',\n      description: 'Applied to 5 jobs!',\n      icon: '🎯',\n      points: 75\n    });\n  }\n  \n  // Quiz performance achievements\n  if (user.quiz_score >= 80) {\n    userAchievements.push({\n      type: 'performance',\n      title: 'Quiz Master',\n      description: 'Scored 80%+ on quizzes!',\n      icon: '🧠',\n      points: 60\n    });\n  }\n  \n  if (userAchievements.length > 0) {\n    achievements.push({\n      user_id: user.user_id,\n      name: user.name,\n      phone: user.phone,\n      email: user.email,\n      new_achievements: userAchievements,\n      total_points: userAchievements.reduce((sum, ach) => sum + ach.points, 0)\n    });\n  }\n}\n\nreturn achievements.map(achievement => ({ json: achievement }));"
+      },
+      "id": "check-achievements",
+      "name": "Check Achievements",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [440, 2900]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "user_achievements",
+        "columns": "user_id, achievement_type, title, description, points, earned_at",
+        "additionalFields": {}
+      },
+      "id": "save-achievements",
+      "name": "Save Achievements",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [660, 2900]
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "operation": "message",
+        "chatId": "={{$json.phone}}",
+        "text": "🎉 ACHIEVEMENT UNLOCKED! 🎉\n\nCongratulations {{$json.name}}!\n\n{{$json.new_achievements.map(ach => `${ach.icon} **${ach.title}**\\n   ${ach.description} (+${ach.points} points)`).join('\\n\\n')}}\n\n🏆 Total Points Earned: {{$json.total_points}}\n\nKeep up the amazing work! You're making incredible progress towards your goals.\n\n📊 Check your full achievement collection: /achievements",
+        "additionalFields": {}
+      },
+      "id": "send-achievement-notification",
+      "name": "Send Achievement Notification",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [880, 2900]
+    }
+  ],
+  "connections": {
+    "User Signup Webhook": {
+      "main": [
+        [
+          {
+            "node": "Set User Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set User Data": {
+      "main": [
+        [
+          {
+            "node": "Save User Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save User Profile": {
+      "main": [
+        [
+          {
+            "node": "Signup Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Job Scan Trigger": {
+      "main": [
+        [
+          {
+            "node": "Scan Indeed Jobs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Scan Naukri Jobs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Scan Coursera Courses",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Scan edX Courses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scan Indeed Jobs": {
+      "main": [
+        [
+          {
+            "node": "Process Job Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scan Naukri Jobs": {
+      "main": [
+        [
+          {
+            "node": "Process Job Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scan Coursera Courses": {
+      "main": [
+        [
+          {
+            "node": "Process Course Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scan edX Courses": {
+      "main": [
+        [
+          {
+            "node": "Process Course Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Job Data": {
+      "main": [
+        [
+          {
+            "node": "Save Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Course Data": {
+      "main": [
+        [
+          {
+            "node": "Save Courses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Matching Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get All Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get All Users": {
+      "main": [
+        [
+          {
+            "node": "AI Matching Engine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Matching Engine": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram Notification",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Email Notification",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Save Recommendations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start Learning Webhook": {
+      "main": [
+        [
+          {
+            "node": "Set Learning Progress",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Learning Progress": {
+      "main": [
+        [
+          {
+            "node": "Save Learning Progress",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Learning Progress": {
+      "main": [
+        [
+          {
+            "node": "Generate Study Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Study Plan": {
+      "main": [
+        [
+          {
+            "node": "Learning Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Progress Reminder": {
+      "main": [
+        [
+          {
+            "node": "Get Active Learners",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Active Learners": {
+      "main": [
+        [
+          {
+            "node": "Generate Progress Reminders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Progress Reminders": {
+      "main": [
+        [
+          {
+            "node": "Send Progress Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Weekly Digest Trigger": {
+      "main": [
+        [
+          {
+            "node": "Generate Weekly Digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Weekly Digest": {
+      "main": [
+        [
+          {
+            "node": "Send Weekly Digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Quiz Response Webhook": {
+      "main": [
+        [
+          {
+            "node": "Evaluate Quiz Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate Quiz Response": {
+      "main": [
+        [
+          {
+            "node": "Process Quiz Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Quiz Results": {
+      "main": [
+        [
+          {
+            "node": "Update Learning Progress",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Learning Progress": {
+      "main": [
+        [
+          {
+            "node": "Send Quiz Feedback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Job Application Webhook": {
+      "main": [
+        [
+          {
+            "node": "Track Job Application",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Track Job Application": {
+      "main": [
+        [
+          {
+            "node": "Generate Application Advice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Application Advice": {
+      "main": [
+        [
+          {
+            "node": "Send Application Guidance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gamification Trigger": {
+      "main": [
+        [
+          {
+            "node": "Check Achievements",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Achievements": {
+      "main": [
+        [
+          {
+            "node": "Save Achievements",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Achievements": {
+      "main": [
+        [
+          {
+            "node": "Send Achievement Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "createdAt": "2024-01-15T10:00:00.000Z",
+      "updatedAt": "2024-01-15T10:00:00.000Z",
+      "id": "1",
+      "name": "AI Coach"
+    },
+    {
+      "createdAt": "2024-01-15T10:00:00.000Z",
+      "updatedAt": "2024-01-15T10:00:00.000Z",
+      "id": "2", 
+      "name": "Education"
+    },
+    {
+      "createdAt": "2024-01-15T10:00:00.000Z",
+      "updatedAt": "2024-01-15T10:00:00.000Z",
+      "id": "3",
+      "name": "Job Matching"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2024-01-15T10:00:00.000Z",
+  "versionId": "1"
+}
